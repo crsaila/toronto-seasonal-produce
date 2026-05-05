@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toronto seasonal produce calendar</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a1a;
+    padding: 1rem;
+    background: #fff;
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .filters input[type="text"], .filters select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    background: #fff;
+    color: #1a1a1a;
+    outline: none;
+    margin-right: 10px;
+    margin-bottom: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .filters select {
+    -webkit-appearance: menulist;
+    appearance: menulist;
+  }
+  .filters input[type="text"] { min-width: 140px; max-width: 220px; }
+  .filters label {
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-bottom: 6px;
+  }
+  .filters label input { margin-right: 6px; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #666;
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 16px;
+    margin-bottom: 4px;
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    margin-right: 5px;
+  }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 10px 16px;
+    min-width: 100px;
+    margin-right: 12px;
+    margin-bottom: 8px;
+  }
+  .stat-label { color: #666; font-size: 11px; margin-bottom: 2px; }
+  .stat-value { font-weight: 500; font-size: 18px; }
+  .stat-sub { color: #666; font-size: 11px; }
+  .chart-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chart-area {
+    min-width: 700px;
+    position: relative;
+    cursor: crosshair;
+  }
+  .month-header {
+    display: flex;
+    align-items: flex-end;
+    margin-bottom: 4px;
+  }
+  .month-label-spacer {
+    width: 180px;
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+  .month-bar-area {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+  }
+  .month-cell {
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    padding-bottom: 4px;
+  }
+  .now-marker {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    background: #E24B4A;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .now-label {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    -webkit-transform: translateX(-50%);
+    font-size: 9px;
+    color: #E24B4A;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .produce-row {
+    display: flex;
+    align-items: center;
+    height: 26px;
+    margin-bottom: 2px;
+    border-radius: 4px;
+    transition: background-color 0.1s ease;
+  }
+  .produce-row.hovered { background-color: rgba(0,0,0,0.04); }
+  .produce-row.regional { border-left: 3px solid #D85A30; padding-left: 4px; }
+  .produce-row:not(.regional) { border-left: 3px solid transparent; padding-left: 7px; }
+  .row-label {
+    width: 170px;
+    min-width: 170px;
+    flex-shrink: 0;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 8px;
+    display: flex;
+    align-items: center;
+    transition: font-weight 0.1s ease;
+  }
+  .row-label.regional-label { font-weight: 500; color: #D85A30; }
+  .row-label.hovered-label { font-weight: 500; color: #000; }
+  .type-badge {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 500;
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+  .type-badge.fruit { border-radius: 50%; background: #FAECE7; color: #993C1D; }
+  .type-badge.veg { border-radius: 2px; background: #E1F5EE; color: #0F6E56; }
+  .bar-container {
+    flex: 1 1 0%;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 22px;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.12);
+  }
+  .week-cell {
+    flex: 1 1 0%;
+    height: 100%;
+    transition: background-color 0.08s ease;
+  }
+  .week-cell.month-border { border-right: 1px solid rgba(0,0,0,0.12); }
+  .bar-now-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #E24B4A;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .tooltip {
+    position: absolute;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 20;
+    line-height: 1.5;
+    min-width: 120px;
+    transform: translateY(-100%);
+    -webkit-transform: translateY(-100%);
+  }
+  .tooltip-title { font-weight: 500; margin-bottom: 2px; }
+  .tooltip-count { color: #aaa; }
+  .tooltip-list { margin-top: 3px; border-top: 1px solid #444; padding-top: 3px; color: #ccc; }
+  .empty-msg { text-align: center; padding: 32px; color: #666; font-size: 14px; }
+  .footnote { margin-top: 20px; font-size: 11px; color: #999; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="filters">
+  <input type="text" id="search" placeholder="Search produce...">
+  <select id="typeFilter">
+    <option value="all">All types</option>
+    <option value="F">Fruits</option>
+    <option value="V">Vegetables</option>
+  </select>
+  <select id="sourceFilter">
+    <option value="all">All sources</option>
+    <option value="field">Field grown</option>
+    <option value="greenhouse">Greenhouse</option>
+    <option value="foraged">Foraged</option>
+    <option value="storage">Storage crops</option>
+  </select>
+  <select id="sortBy">
+    <option value="name">Sort: A&ndash;Z</option>
+    <option value="earliest">Sort: earliest peak</option>
+    <option value="type">Sort: by type</option>
+  </select>
+  <label><input type="checkbox" id="regionalOnly"> Regional highlights only</label>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="legend-swatch" style="background:#1D9E75"></span>Peak season</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#9FE1CB"></span>Shoulder season</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#378ADD"></span>Greenhouse</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#D3D1C7"></span>Storage / year-round</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:transparent;border:2px solid #D85A30"></span>Regional / unique to area</span>
+</div>
+
+<div class="stats">
+  <div class="stat-card"><div class="stat-label">Showing</div><div class="stat-value" id="statShowing">0</div><div class="stat-sub" id="statShowingSub"></div></div>
+  <div class="stat-card"><div class="stat-label">In peak/shoulder now</div><div class="stat-value" id="statNow">0</div><div class="stat-sub" id="statNowSub"></div></div>
+  <div class="stat-card"><div class="stat-label">Regional highlights</div><div class="stat-value" id="statRegional">0</div><div class="stat-sub">unique to area</div></div>
+</div>
+
+<div class="chart-scroll">
+  <div class="chart-area" id="chartArea">
+    <div id="tooltipEl" class="tooltip" style="display:none"></div>
+    <div class="month-header">
+      <div class="month-label-spacer"></div>
+      <div class="month-bar-area" id="monthBarArea"></div>
+    </div>
+    <div id="rowsContainer"></div>
+  </div>
+</div>
+
+<div class="footnote">
+  Data synthesised from Foodland Ontario (Government of Ontario), Ontario Greenhouse Vegetable Growers, and regional farmers&rsquo; market reports. Week boundaries are approximate and shift with weather &mdash; southern Ontario (Niagara, Essex County) tends to run 1&ndash;2 weeks earlier than the GTA. Climate shifts over the past decade have generally extended growing seasons by 1&ndash;3 weeks. Items marked as &ldquo;regional highlights&rdquo; are uniquely associated with the Toronto/southern Ontario foodshed and worth seeking out at local markets.
+</div>
+
+<script>
+var DATA = [
+  {name:"Apples",type:"F",regional:false,seasons:[{start:1,end:12,intensity:"storage",note:"Cold storage"},{start:33,end:44,intensity:"peak",note:"Field harvest"},{start:30,end:32,intensity:"shoulder",note:"Early varieties"},{start:45,end:48,intensity:"shoulder",note:"Late harvest"}]},
+  {name:"Apricots",type:"F",regional:false,seasons:[{start:28,end:33,intensity:"peak",note:"Niagara region"}]},
+  {name:"Blueberries",type:"F",regional:false,seasons:[{start:27,end:37,intensity:"peak",note:"Field"},{start:26,end:26,intensity:"shoulder",note:"Early"},{start:38,end:39,intensity:"shoulder",note:"Late"}]},
+  {name:"Cherries (sweet)",type:"F",regional:false,seasons:[{start:27,end:33,intensity:"peak",note:"Niagara region"}]},
+  {name:"Sour cherries",type:"F",regional:true,seasons:[{start:28,end:32,intensity:"peak",note:"Niagara & local orchards"}]},
+  {name:"Cranberries",type:"F",regional:false,seasons:[{start:35,end:43,intensity:"peak",note:"Muskoka & bogs"}]},
+  {name:"Currants (red/black)",type:"F",regional:true,seasons:[{start:27,end:33,intensity:"peak",note:"Local farms"}]},
+  {name:"Elderberries",type:"F",regional:true,seasons:[{start:34,end:38,intensity:"peak",note:"Wild & cultivated"}]},
+  {name:"Gooseberries",type:"F",regional:true,seasons:[{start:27,end:33,intensity:"peak",note:"Local farms"}]},
+  {name:"Grapes",type:"F",regional:false,seasons:[{start:34,end:42,intensity:"peak",note:"Niagara & Prince Edward County"},{start:32,end:33,intensity:"shoulder",note:"Early"}]},
+  {name:"Haskap berries",type:"F",regional:true,seasons:[{start:24,end:29,intensity:"peak",note:"Relatively new to Ontario"}]},
+  {name:"Muskmelon / cantaloupe",type:"F",regional:false,seasons:[{start:33,end:38,intensity:"peak",note:"Field"},{start:32,end:32,intensity:"shoulder",note:"Early"}]},
+  {name:"Nectarines",type:"F",regional:false,seasons:[{start:32,end:38,intensity:"peak",note:"Niagara"}]},
+  {name:"Peaches",type:"F",regional:false,seasons:[{start:29,end:38,intensity:"peak",note:"Niagara region"},{start:28,end:28,intensity:"shoulder",note:"Early"}]},
+  {name:"Pears",type:"F",regional:false,seasons:[{start:34,end:44,intensity:"peak",note:"Field"},{start:45,end:52,intensity:"storage",note:"Cold storage"},{start:1,end:8,intensity:"storage",note:"Cold storage"}]},
+  {name:"Plums",type:"F",regional:false,seasons:[{start:30,end:40,intensity:"peak",note:"Niagara & local"}]},
+  {name:"Raspberries",type:"F",regional:false,seasons:[{start:27,end:37,intensity:"peak",note:"Field"},{start:38,end:41,intensity:"shoulder",note:"Fall varieties"}]},
+  {name:"Rhubarb",type:"F",regional:false,seasons:[{start:15,end:25,intensity:"peak",note:"Outdoor"},{start:10,end:14,intensity:"shoulder",note:"Forced rhubarb (early)"}]},
+  {name:"Saskatoon berries",type:"F",regional:true,seasons:[{start:25,end:29,intensity:"peak",note:"Serviceberry family"}]},
+  {name:"Strawberries (field)",type:"F",regional:false,seasons:[{start:23,end:26,intensity:"peak",note:"June-bearing peak"},{start:27,end:41,intensity:"shoulder",note:"Day-neutral varieties"}]},
+  {name:"Strawberries (greenhouse)",type:"F",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Ontario greenhouse year-round"}]},
+  {name:"Watermelon",type:"F",regional:false,seasons:[{start:30,end:38,intensity:"peak",note:"Field"}]},
+  {name:"Pawpaw",type:"F",regional:true,seasons:[{start:37,end:41,intensity:"peak",note:"Niagara & Lake Erie north shore"}]},
+  {name:"Wild grapes",type:"F",regional:true,seasons:[{start:36,end:42,intensity:"peak",note:"Foraged"}]},
+  {name:"Asparagus",type:"V",regional:false,seasons:[{start:18,end:25,intensity:"peak",note:"Field"},{start:17,end:17,intensity:"shoulder",note:"Early"}]},
+  {name:"Beans (green/yellow)",type:"V",regional:false,seasons:[{start:26,end:40,intensity:"peak",note:"Field"},{start:41,end:42,intensity:"shoulder",note:"Late"}]},
+  {name:"Beets",type:"V",regional:false,seasons:[{start:27,end:44,intensity:"peak",note:"Field"},{start:45,end:52,intensity:"storage",note:"Storage"},{start:1,end:16,intensity:"storage",note:"Storage"}]},
+  {name:"Bok choy",type:"V",regional:false,seasons:[{start:24,end:44,intensity:"peak",note:"Field"}]},
+  {name:"Broccoli",type:"V",regional:false,seasons:[{start:24,end:27,intensity:"peak",note:"Spring crop"},{start:36,end:42,intensity:"peak",note:"Fall crop"}]},
+  {name:"Brussels sprouts",type:"V",regional:false,seasons:[{start:36,end:46,intensity:"peak",note:"Better after frost"}]},
+  {name:"Cabbage",type:"V",regional:false,seasons:[{start:24,end:44,intensity:"peak",note:"Field"},{start:45,end:52,intensity:"storage",note:"Storage"},{start:1,end:16,intensity:"storage",note:"Storage"}]},
+  {name:"Carrots",type:"V",regional:false,seasons:[{start:26,end:44,intensity:"peak",note:"Field"},{start:1,end:25,intensity:"storage",note:"Year-round storage"},{start:45,end:52,intensity:"storage",note:"Storage"}]},
+  {name:"Cauliflower",type:"V",regional:false,seasons:[{start:24,end:27,intensity:"peak",note:"Spring"},{start:36,end:44,intensity:"peak",note:"Fall"}]},
+  {name:"Celery",type:"V",regional:false,seasons:[{start:28,end:42,intensity:"peak",note:"Field"}]},
+  {name:"Corn (sweet)",type:"V",regional:false,seasons:[{start:29,end:39,intensity:"peak",note:"Field"},{start:40,end:41,intensity:"shoulder",note:"Late"}]},
+  {name:"Cucumbers (field)",type:"V",regional:false,seasons:[{start:25,end:40,intensity:"peak",note:"Field"}]},
+  {name:"Cucumbers (greenhouse)",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Ontario greenhouse year-round"}]},
+  {name:"Eggplant",type:"V",regional:false,seasons:[{start:32,end:40,intensity:"peak",note:"Field"}]},
+  {name:"Fiddleheads",type:"V",regional:true,seasons:[{start:17,end:20,intensity:"peak",note:"Foraged \u2014 Don Valley, Rouge Valley"}]},
+  {name:"Garlic",type:"V",regional:false,seasons:[{start:28,end:44,intensity:"peak",note:"Fresh harvest"},{start:45,end:52,intensity:"storage",note:"Cured storage"},{start:1,end:12,intensity:"storage",note:"Cured storage"}]},
+  {name:"Garlic scapes",type:"V",regional:true,seasons:[{start:23,end:27,intensity:"peak",note:"Brief season"}]},
+  {name:"Kale",type:"V",regional:false,seasons:[{start:24,end:46,intensity:"peak",note:"Sweeter after frost"}]},
+  {name:"Leeks",type:"V",regional:false,seasons:[{start:33,end:48,intensity:"peak",note:"Fall/early winter"},{start:49,end:52,intensity:"storage",note:"Storage"},{start:1,end:8,intensity:"storage",note:"Storage"}]},
+  {name:"Lettuce (field)",type:"V",regional:false,seasons:[{start:22,end:42,intensity:"peak",note:"Field"}]},
+  {name:"Lettuce (greenhouse)",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Ontario greenhouse year-round"}]},
+  {name:"Morel mushrooms",type:"V",regional:true,seasons:[{start:18,end:22,intensity:"peak",note:"Foraged \u2014 Don Valley, High Park"}]},
+  {name:"Mushrooms (cultivated)",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Indoor cultivation year-round"}]},
+  {name:"Napa cabbage",type:"V",regional:false,seasons:[{start:24,end:44,intensity:"peak",note:"Field"}]},
+  {name:"Onions (cooking)",type:"V",regional:false,seasons:[{start:32,end:42,intensity:"peak",note:"Fresh harvest"},{start:1,end:31,intensity:"storage",note:"Year-round storage"},{start:43,end:52,intensity:"storage",note:"Storage"}]},
+  {name:"Onions (green)",type:"V",regional:false,seasons:[{start:24,end:42,intensity:"peak",note:"Field"}]},
+  {name:"Parsnips",type:"V",regional:false,seasons:[{start:33,end:46,intensity:"peak",note:"Sweeter after frost"},{start:47,end:52,intensity:"storage",note:"Storage"},{start:1,end:16,intensity:"storage",note:"Storage"}]},
+  {name:"Peas (green/snow)",type:"V",regional:false,seasons:[{start:23,end:27,intensity:"peak",note:"Spring crop"},{start:36,end:40,intensity:"shoulder",note:"Fall crop"}]},
+  {name:"Peppers (field)",type:"V",regional:false,seasons:[{start:29,end:40,intensity:"peak",note:"Field"}]},
+  {name:"Peppers (greenhouse)",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Ontario greenhouse year-round"}]},
+  {name:"Potatoes",type:"V",regional:false,seasons:[{start:28,end:42,intensity:"peak",note:"Fresh harvest"},{start:1,end:27,intensity:"storage",note:"Year-round storage"},{start:43,end:52,intensity:"storage",note:"Storage"}]},
+  {name:"Pumpkin",type:"V",regional:false,seasons:[{start:36,end:43,intensity:"peak",note:"Field"}]},
+  {name:"Radishes",type:"V",regional:false,seasons:[{start:19,end:44,intensity:"peak",note:"Field"}]},
+  {name:"Wild leeks (ramps)",type:"V",regional:true,seasons:[{start:15,end:21,intensity:"peak",note:"Foraged \u2014 harvest sustainably"}]},
+  {name:"Rapini",type:"V",regional:false,seasons:[{start:28,end:42,intensity:"peak",note:"Field"}]},
+  {name:"Rutabaga",type:"V",regional:false,seasons:[{start:36,end:44,intensity:"peak",note:"Field"},{start:1,end:35,intensity:"storage",note:"Year-round storage"},{start:45,end:52,intensity:"storage",note:"Storage"}]},
+  {name:"Spinach",type:"V",regional:false,seasons:[{start:18,end:25,intensity:"peak",note:"Spring"},{start:36,end:42,intensity:"peak",note:"Fall"}]},
+  {name:"Squash (summer/zucchini)",type:"V",regional:false,seasons:[{start:25,end:40,intensity:"peak",note:"Field"}]},
+  {name:"Squash (winter)",type:"V",regional:false,seasons:[{start:35,end:44,intensity:"peak",note:"Field harvest"},{start:45,end:52,intensity:"storage",note:"Storage"},{start:1,end:4,intensity:"storage",note:"Storage"}]},
+  {name:"Sweet potatoes",type:"V",regional:false,seasons:[{start:38,end:42,intensity:"peak",note:"Harvest"},{start:1,end:37,intensity:"storage",note:"Year-round storage/import"},{start:43,end:52,intensity:"storage",note:"Storage"}]},
+  {name:"Tomatoes (field)",type:"V",regional:false,seasons:[{start:29,end:40,intensity:"peak",note:"Field"},{start:28,end:28,intensity:"shoulder",note:"Early"},{start:41,end:42,intensity:"shoulder",note:"Late/green"}]},
+  {name:"Tomatoes (greenhouse)",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Ontario greenhouse year-round"}]},
+  {name:"Daikon radish",type:"V",regional:false,seasons:[{start:24,end:44,intensity:"peak",note:"Field"}]},
+  {name:"Sprouts",type:"V",regional:false,seasons:[{start:1,end:52,intensity:"greenhouse",note:"Indoor year-round"}]},
+  {name:"Artichoke",type:"V",regional:false,seasons:[{start:33,end:42,intensity:"peak",note:"Field \u2014 limited"}]},
+  {name:"Bitter melon",type:"V",regional:false,seasons:[{start:33,end:42,intensity:"peak",note:"Field"}]},
+  {name:"Chanterelle mushrooms",type:"V",regional:true,seasons:[{start:28,end:36,intensity:"peak",note:"Foraged in deciduous forests"}]}
+];
+
+var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var MONTH_STARTS = [1,5,9,14,18,23,27,31,36,40,44,49];
+var MONTH_START_SET = {};
+for (var m = 0; m < MONTH_STARTS.length; m++) MONTH_START_SET[MONTH_STARTS[m]] = true;
+
+var COLORS = {
+  peak:       {bg:"#1D9E75", hover:"#178a66"},
+  shoulder:   {bg:"#9FE1CB", hover:"#88d4bb"},
+  greenhouse: {bg:"#378ADD", hover:"#2d78c5"},
+  storage:    {bg:"#D3D1C7", hover:"#c4c2b8"}
+};
+
+function priority(v) {
+  if (v === "peak") return 4;
+  if (v === "shoulder") return 3;
+  if (v === "greenhouse") return 2;
+  if (v === "storage") return 1;
+  return 0;
+}
+
+function getWeekInfo(item, w) {
+  var best = null, note = "";
+  for (var i = 0; i < item.seasons.length; i++) {
+    var s = item.seasons[i];
+    if (w >= s.start && w <= s.end && (!best || priority(s.intensity) > priority(best))) {
+      best = s.intensity;
+      note = s.note;
+    }
+  }
+  return {intensity: best, note: note};
+}
+
+var now = new Date();
+var yearStart = new Date(now.getFullYear(), 0, 1);
+var currentWeek = Math.ceil((now - yearStart) / (7 * 24 * 60 * 60 * 1000));
+
+var LABEL_W = 180;
+var ROW_H = 28;
+
+var filteredItems = [];
+var hoveredWeek = null;
+var hoveredRowIdx = -1;
+
+function getFiltered() {
+  var search = document.getElementById("search").value.toLowerCase();
+  var typeF = document.getElementById("typeFilter").value;
+  var sourceF = document.getElementById("sourceFilter").value;
+  var sortF = document.getElementById("sortBy").value;
+  var regOnly = document.getElementById("regionalOnly").checked;
+
+  var items = DATA.slice();
+  if (search) items = items.filter(function(i) { return i.name.toLowerCase().indexOf(search) !== -1; });
+  if (typeF !== "all") items = items.filter(function(i) { return i.type === typeF; });
+  if (sourceF !== "all") {
+    items = items.filter(function(i) {
+      if (sourceF === "greenhouse") return i.seasons.some(function(s) { return s.intensity === "greenhouse"; });
+      if (sourceF === "field") return i.seasons.some(function(s) { return s.intensity === "peak" || s.intensity === "shoulder"; });
+      if (sourceF === "foraged") return i.seasons.some(function(s) { return s.note.toLowerCase().indexOf("forag") !== -1; });
+      if (sourceF === "storage") return i.seasons.some(function(s) { return s.intensity === "storage"; });
+      return true;
+    });
+  }
+  if (regOnly) items = items.filter(function(i) { return i.regional; });
+  if (sortF === "name") items.sort(function(a,b) { return a.name.localeCompare(b.name); });
+  else if (sortF === "earliest") {
+    items.sort(function(a,b) {
+      var pa = a.seasons.filter(function(s){return s.intensity==="peak"||s.intensity==="shoulder";});
+      var pb = b.seasons.filter(function(s){return s.intensity==="peak"||s.intensity==="shoulder";});
+      var aM = pa.length ? Math.min.apply(null, pa.map(function(s){return s.start;})) : 53;
+      var bM = pb.length ? Math.min.apply(null, pb.map(function(s){return s.start;})) : 53;
+      return aM - bM;
+    });
+  } else if (sortF === "type") {
+    items.sort(function(a,b) { return a.type.localeCompare(b.type) || a.name.localeCompare(b.name); });
+  }
+  return items;
+}
+
+function buildMonthHeader() {
+  var container = document.getElementById("monthBarArea");
+  container.innerHTML = "";
+  for (var i = 0; i < MONTHS.length; i++) {
+    var startW = MONTH_STARTS[i];
+    var endW = i < 11 ? MONTH_STARTS[i+1] - 1 : 52;
+    var span = endW - startW + 1;
+    var d = document.createElement("div");
+    d.className = "month-cell";
+    d.style.width = (span / 52 * 100) + "%";
+    if (i > 0) d.style.borderLeft = "1px solid rgba(0,0,0,0.1)";
+    d.textContent = MONTHS[i];
+    container.appendChild(d);
+  }
+  var marker = document.createElement("div");
+  marker.className = "now-marker";
+  marker.style.left = ((currentWeek - 0.5) / 52 * 100) + "%";
+  var label = document.createElement("div");
+  label.className = "now-label";
+  label.textContent = "Now";
+  marker.appendChild(label);
+  container.appendChild(marker);
+}
+
+function render() {
+  filteredItems = getFiltered();
+  var container = document.getElementById("rowsContainer");
+  container.innerHTML = "";
+
+  var inSeasonNow = DATA.filter(function(item) {
+    return item.seasons.some(function(s) {
+      return currentWeek >= s.start && currentWeek <= s.end && (s.intensity === "peak" || s.intensity === "shoulder");
+    });
+  }).length;
+
+  document.getElementById("statShowing").textContent = filteredItems.length;
+  document.getElementById("statShowingSub").textContent = "of " + DATA.length + " items";
+  document.getElementById("statNow").textContent = inSeasonNow;
+  document.getElementById("statNowSub").textContent = "week " + currentWeek + " of 52";
+  document.getElementById("statRegional").textContent = DATA.filter(function(i){return i.regional;}).length;
+
+  for (var r = 0; r < filteredItems.length; r++) {
+    var item = filteredItems[r];
+    var row = document.createElement("div");
+    row.className = "produce-row" + (item.regional ? " regional" : "");
+    row.setAttribute("data-idx", r);
+
+    var labelDiv = document.createElement("div");
+    labelDiv.className = "row-label" + (item.regional ? " regional-label" : "");
+    labelDiv.title = item.name + (item.regional ? " \u2014 Regional highlight" : "");
+
+    var badge = document.createElement("span");
+    badge.className = "type-badge " + (item.type === "F" ? "fruit" : "veg");
+    badge.textContent = item.type === "F" ? "F" : "V";
+    labelDiv.appendChild(badge);
+    labelDiv.appendChild(document.createTextNode(item.name));
+    row.appendChild(labelDiv);
+
+    var barContainer = document.createElement("div");
+    barContainer.className = "bar-container";
+
+    for (var w = 1; w <= 52; w++) {
+      var info = getWeekInfo(item, w);
+      var cell = document.createElement("div");
+      cell.className = "week-cell" + (MONTH_START_SET[w+1] ? " month-border" : "");
+      cell.setAttribute("data-w", w);
+      cell.setAttribute("data-intensity", info.intensity || "");
+      cell.setAttribute("data-note", info.note || "");
+      if (info.intensity && COLORS[info.intensity]) {
+        cell.style.backgroundColor = COLORS[info.intensity].bg;
+      }
+      cell.title = info.intensity ? "Week " + w + ": " + info.note : "Week " + w + ": Not in season";
+      barContainer.appendChild(cell);
+    }
+
+    var nowLine = document.createElement("div");
+    nowLine.className = "bar-now-line";
+    nowLine.style.left = ((currentWeek - 0.5) / 52 * 100) + "%";
+    barContainer.appendChild(nowLine);
+
+    row.appendChild(barContainer);
+    container.appendChild(row);
+  }
+}
+
+function updateHover(weekNum, rowIdx) {
+  var rows = document.querySelectorAll(".produce-row");
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r];
+    var isHoveredRow = (r === rowIdx);
+    if (isHoveredRow) row.classList.add("hovered");
+    else row.classList.remove("hovered");
+
+    var label = row.querySelector(".row-label");
+    var isRegional = row.classList.contains("regional");
+    if (isHoveredRow && !isRegional) label.classList.add("hovered-label");
+    else label.classList.remove("hovered-label");
+
+    var cells = row.querySelectorAll(".week-cell");
+    for (var c = 0; c < cells.length; c++) {
+      var w = parseInt(cells[c].getAttribute("data-w"));
+      var intensity = cells[c].getAttribute("data-intensity");
+      if (w === weekNum && intensity && COLORS[intensity]) {
+        cells[c].style.backgroundColor = COLORS[intensity].hover;
+      } else if (w === weekNum && !intensity) {
+        cells[c].style.backgroundColor = "rgba(0,0,0,0.04)";
+      } else if (intensity && COLORS[intensity]) {
+        cells[c].style.backgroundColor = COLORS[intensity].bg;
+      } else {
+        cells[c].style.backgroundColor = "transparent";
+      }
+    }
+  }
+}
+
+var chartArea = document.getElementById("chartArea");
+var tooltipEl = document.getElementById("tooltipEl");
+
+chartArea.addEventListener("mousemove", function(e) {
+  var rect = chartArea.getBoundingClientRect();
+  var rowsContainer = document.getElementById("rowsContainer");
+  var rowsRect = rowsContainer.getBoundingClientRect();
+  var y = e.clientY - rowsRect.top;
+  var rowIdx = Math.floor(y / ROW_H);
+  if (rowIdx < 0 || rowIdx >= filteredItems.length) rowIdx = -1;
+
+  var x = e.clientX - rect.left - LABEL_W;
+  var barWidth = rect.width - LABEL_W;
+  var weekNum = null;
+  if (x >= 0 && x <= barWidth && barWidth > 0) {
+    weekNum = Math.max(1, Math.min(52, Math.ceil((x / barWidth) * 52)));
+  }
+
+  if (weekNum !== hoveredWeek || rowIdx !== hoveredRowIdx) {
+    hoveredWeek = weekNum;
+    hoveredRowIdx = rowIdx;
+    updateHover(weekNum, rowIdx);
+  }
+
+  if (weekNum) {
+    var inSeason = filteredItems.filter(function(item) {
+      var info = getWeekInfo(item, weekNum);
+      return info.intensity === "peak" || info.intensity === "shoulder";
+    });
+    var monthIdx = 0;
+    for (var i = MONTH_STARTS.length - 1; i >= 0; i--) {
+      if (weekNum >= MONTH_STARTS[i]) { monthIdx = i; break; }
+    }
+    var weekInMonth = weekNum - MONTH_STARTS[monthIdx] + 1;
+    var names = inSeason.slice(0,4).map(function(i){return i.name;});
+    var html = '<div class="tooltip-title">' + MONTHS[monthIdx] + " wk " + weekInMonth + '</div>';
+    html += '<div class="tooltip-count">' + inSeason.length + ' items in peak/shoulder season</div>';
+    if (names.length > 0) {
+      html += '<div class="tooltip-list">' + names.join(", ");
+      if (inSeason.length > 4) html += " +" + (inSeason.length - 4) + " more";
+      html += '</div>';
+    }
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.display = "block";
+    var tipLeft = Math.min(e.clientX - rect.left + 12, rect.width - 190);
+    tooltipEl.style.left = tipLeft + "px";
+    tooltipEl.style.top = (rowsRect.top - rect.top - 4) + "px";
+  } else {
+    tooltipEl.style.display = "none";
+  }
+});
+
+chartArea.addEventListener("mouseleave", function() {
+  hoveredWeek = null;
+  hoveredRowIdx = -1;
+  updateHover(null, -1);
+  tooltipEl.style.display = "none";
+});
+
+document.getElementById("search").addEventListener("input", render);
+document.getElementById("typeFilter").addEventListener("change", render);
+document.getElementById("sourceFilter").addEventListener("change", render);
+document.getElementById("sortBy").addEventListener("change", render);
+document.getElementById("regionalOnly").addEventListener("change", render);
+
+buildMonthHeader();
+render();
+</script>
+</body>
+</html>
